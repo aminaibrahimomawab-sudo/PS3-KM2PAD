@@ -1,0 +1,60 @@
+name: Build PS3 Project
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download PS3DEV toolchain
+        run: |
+          git clone --depth 1 https://github.com/ps3dev/ps3dev.git /tmp/ps3dev
+
+      - name: Build PS3DEV toolchain
+        working-directory: /tmp/ps3dev
+        run: |
+          ./build.sh
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract project ZIP
+        run: |
+          mkdir -p project
+          unzip -o PS3xPAD_NOVA_MouseSmooth_0.4_HEN.zip -d project
+          find project -maxdepth 4 -type f | sort
+
+      - name: Configure PS3 environment
+        run: |
+          echo "PS3DEV=/usr/local/ps3dev" >> $GITHUB_ENV
+          echo "PSL1GHT=/usr/local/ps3dev" >> $GITHUB_ENV
+          echo "/usr/local/ps3dev/bin" >> $GITHUB_PATH
+          echo "/usr/local/ps3dev/ppu/bin" >> $GITHUB_PATH
+          echo "/usr/local/ps3dev/spu/bin" >> $GITHUB_PATH
+
+      - name: Check project
+        run: |
+          find project -name Makefile -print
+          find project -name '*.c' -print
+
+      - name: Build
+        run: |
+          cd project/ps3xpad_review/src
+          make
+
+      - name: Collect output
+        run: |
+          mkdir -p output
+          find project -type f \( -name '*.sprx' -o -name '*.prx' -o -name '*.self' -o -name '*.elf' \) -exec cp {} output/ \;
+          ls -lah output
+
+      - name: Upload PS3 build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS3-KM2PAD-Build
+          path: output/
