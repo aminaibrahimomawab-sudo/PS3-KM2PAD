@@ -14,90 +14,105 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download PS3DEV
+      - name: Show repository
         run: |
-          git clone --depth 1 https://github.com/ps3dev/ps3dev.git /tmp/ps3dev
+          echo "=== Repository files ==="
+          find . -maxdepth 4 -type f | sort
 
-      - name: Install PS3DEV dependencies
-        working-directory: /tmp/ps3dev
+      - name: Find project archive
         run: |
-          chmod +x prepare.sh
-          sudo ./prepare.sh
-
-      - name: Prepare PS3DEV directory
-        run: |
-          sudo mkdir -p /usr/local/ps3dev
-          sudo chown -R "$USER:" /usr/local/ps3dev
-
-      - name: Build PS3DEV
-        working-directory: /tmp/ps3dev
-        run: |
-          chmod +x build-all.sh
-          export PS3DEV=/usr/local/ps3dev
-          export PSL1GHT=/usr/local/ps3dev
-          export PATH="$PATH:$PS3DEV/bin:$PS3DEV/ppu/bin:$PS3DEV/spu/bin"
-          ./build-all.sh
-
-      - name: Configure PS3DEV
-        run: |
-          echo "PS3DEV=/usr/local/ps3dev" >> "$GITHUB_ENV"
-          echo "PSL1GHT=/usr/local/ps3dev" >> "$GITHUB_ENV"
-          echo "/usr/local/ps3dev/bin" >> "$GITHUB_PATH"
-          echo "/usr/local/ps3dev/ppu/bin" >> "$GITHUB_PATH"
-          echo "/usr/local/ps3dev/spu/bin" >> "$GITHUB_PATH"
-
-      - name: Check PS3 tools
-        run: |
-          ppu-gcc --version
-          which ppu-gcc
-
-      - name: Check project ZIP
-        run: |
-          test -f PS3xPAD_NOVA_MouseSmooth_0.4_HEN.zip
-          unzip -t PS3xPAD_NOVA_MouseSmooth_0.4_HEN.zip
+          echo "=== Searching for ZIP ==="
+          find . -type f -iname "*.zip" -print
 
       - name: Extract project
         run: |
+          ZIP_FILE="$(find . -maxdepth 2 -type f -iname 'PS3xPAD_NOVA_MouseSmooth_0.4_HEN.zip' | head -n 1)"
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: Project ZIP was not found."
+            exit 1
+          fi
+
           mkdir -p project
-          unzip -o PS3xPAD_NOVA_MouseSmooth_0.4_HEN.zip -d project
+          unzip -o "$ZIP_FILE" -d project
+
+      - name: Check source
+        run: |
+          echo "=== Source files ==="
           find project -type f | sort
 
-      - name: Check source files
-        run: |
           test -f project/ps3xpad_review/src/Makefile
           test -f project/ps3xpad_review/src/main.c
           test -f project/ps3xpad_review/src/libc.c
-          test -f project/ps3xpad_review/src/ControlStruct.h
 
-      - name: Check original build requirements
+      - name: Inspect required build environment
         working-directory: project/ps3xpad_review/src
         run: |
           echo "=== Makefile ==="
           cat Makefile
+
+          echo
+          echo "=== CELL_SDK ==="
+          if [ -n "${CELL_SDK:-}" ]; then
+            echo "CELL_SDK=$CELL_SDK"
+          else
+            echo "CELL_SDK is NOT SET"
+          fi
+
+          echo
           echo "=== Required tools ==="
-          command -v ppu-lv2-gcc || true
-          command -v ppu-lv2-strip || true
-          command -v scetool || true
-          echo "=== Environment ==="
-          echo "CELL_SDK=${CELL_SDK:-NOT_SET}"
-          echo "PS3DEV=${PS3DEV:-NOT_SET}"
-          echo "PSL1GHT=${PSL1GHT:-NOT_SET}"
+          for tool in \
+            ppu-lv2-gcc \
+            ppu-lv2-strip \
+            ppu-lv2-ar \
+            ppu-lv2-ranlib \
+            ppu-lv2-ld \
+            ppu-lve-prx-exportpickup \
+            scetool
+          do
+            if command -v "$tool" >/dev/null 2>&1; then
+              echo "FOUND: $tool"
+            else
+              echo "MISSING: $tool"
+            fi
+          done
+
+      - name: Stop before incompatible build
+        working-directory: project/ps3xpad_review/src
+        run: |
+          if [ -z "${CELL_SDK:-}" ]; then
+            echo ""
+            echo "ERROR: CELL_SDK is not available."
+            echo "The original project requires the Sony Cell SDK."
+            echo "PS3DEV/PSL1GHT alone cannot build this Makefile as-is."
+            exit 1
+          fi
+
+          if ! command -v ppu-lv2-gcc >/dev/null 2>&1; then
+            echo ""
+            echo "ERROR: ppu-lv2-gcc is missing."
+            exit 1
+          fi
+
+          echo "Required build environment detected."
 
       - name: Build project
         working-directory: project/ps3xpad_review/src
         run: |
           make
 
-      - name: Find PS3 output
+      - name: Find output
         run: |
           mkdir -p output
+
           find project -type f \( \
             -name "*.sprx" -o \
             -name "*.prx" -o \
             -name "*.self" -o \
             -name "*.elf" \
           \) -exec cp {} output/ \;
-          echo "=== BUILD OUTPUT ==="
+
+          echo "=== OUTPUT ==="
           ls -lah output
 
       - name: Upload build
@@ -106,3 +121,4 @@ jobs:
           name: PS3-KM2PAD-Build
           path: output/
           if-no-files-found: error
+          
