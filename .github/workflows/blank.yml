@@ -1,0 +1,79 @@
+name: KM2PAD R2 Build Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PS3DEV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget tar xz-utils unzip
+
+          mkdir -p "$HOME/ps3dev"
+
+          wget -q \
+            https://github.com/ps3dev/ps3dev/releases/latest/download/ps3dev-linux-X64.tar.gz \
+            -O /tmp/ps3dev.tar.gz
+
+          tar -xzf /tmp/ps3dev.tar.gz -C "$HOME/ps3dev" --strip-components=1
+
+          echo "PS3DEV=$HOME/ps3dev" >> "$GITHUB_ENV"
+          echo "PSL1GHT=$HOME/ps3dev" >> "$GITHUB_ENV"
+          echo "$HOME/ps3dev/bin" >> "$GITHUB_PATH"
+          echo "$HOME/ps3dev/ppu/bin" >> "$GITHUB_PATH"
+          echo "$HOME/ps3dev/spu/bin" >> "$GITHUB_PATH"
+
+      - name: Check toolchain
+        run: |
+          echo "PS3DEV=$PS3DEV"
+          echo "PSL1GHT=$PSL1GHT"
+          ppu-gcc --version
+          ls -la "$PS3DEV"
+
+      - name: Locate R2 source
+        run: |
+          find . -maxdepth 4 -type f | sort
+
+      - name: Prepare R2
+        run: |
+          mkdir -p build_r2
+
+          ZIP="$(find . -type f -name 'PS3xPAD_KM2PAD_HID_REVIEWED_R2.zip' | head -n 1)"
+
+          if [ -z "$ZIP" ]; then
+            echo "R2 ZIP not found in repository."
+            exit 1
+          fi
+
+          unzip -o "$ZIP" -d build_r2
+
+      - name: Show R2 source
+        run: |
+          find build_r2 -type f | sort
+
+      - name: Try source build
+        run: |
+          SRC="$(find build_r2 -type f -name Makefile | head -n 1)"
+
+          if [ -z "$SRC" ]; then
+            echo "Makefile not found."
+            exit 1
+          fi
+
+          DIR="$(dirname "$SRC")"
+          echo "Building: $DIR"
+
+          cd "$DIR"
+
+          echo "=== Makefile ==="
+          cat Makefile
+
+          echo "=== Starting make ==="
+          make
