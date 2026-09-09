@@ -1,4 +1,4 @@
-name: PS3 KM HEN
+name: PS3 KM HEN Build
 
 on:
   workflow_dispatch:
@@ -7,25 +7,43 @@ on:
       - main
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify project
-        shell: bash
+      - name: Check project files
         run: |
           set -e
-
-          echo "Checking PS3 KM HEN project..."
-
           test -f Makefile
-          test -d .src
           test -f .src/main.c
+          echo "Project files OK"
 
-          echo "Makefile: OK"
-          echo ".src directory: OK"
-          echo ".src/main.c: OK"
-          echo "Project verification completed successfully."
+      - name: Build PS3 toolchain
+        run: |
+          git clone --depth 1 https://github.com/ps3dev/ps3toolchain.git
+          cd ps3toolchain
+          ./toolchain.sh
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build project
+        run: |
+          export CELL_SDK="$HOME/ps3dev"
+          make
+
+      - name: Show build output
+        run: |
+          find . -type f \( -name "*.prx" -o -name "*.sprx" -o -name "*.self" \) -print
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS3-KM2PAD-build
+          path: |
+            **/*.prx
+            **/*.sprx
+            **/*.self
+          if-no-files-found: warn 
