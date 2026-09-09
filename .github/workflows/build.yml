@@ -18,8 +18,14 @@ jobs:
         shell: bash
         run: |
           set -e
+
+          echo "Checking PS3 KM HEN project..."
+
           test -f Makefile
-          test -f src/main.c
+          test -d .src
+          test -f .src/main.c
+
           echo "Makefile: OK"
-          echo "Source: OK"
-          echo "PS3 KM HEN project verified."
+          echo ".src directory: OK"
+          echo ".src/main.c: OK"
+          echo "Project verification completed successfully."
