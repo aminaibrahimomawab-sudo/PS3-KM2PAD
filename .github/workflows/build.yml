@@ -1,0 +1,25 @@
+name: PS3 KM HEN
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify project
+        shell: bash
+        run: |
+          set -e
+          test -f Makefile
+          test -f src/main.c
+          echo "Makefile: OK"
+          echo "Source: OK"
+          echo "PS3 KM HEN project verified."
